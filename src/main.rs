@@ -1,5 +1,5 @@
 use core::fmt::Debug;
-use image::{Rgb, RgbImage};
+use image::{GenericImageView, Rgb, RgbImage};
 use num::{clamp, Bounded, Float, ToPrimitive, Zero};
 use std::fs::File;
 use std::path::Path;
@@ -19,6 +19,18 @@ fn clamp_scale<T: Float + Debug>(value: T, in_begin: T, in_end: T, out_begin: T,
 
 fn saturating_cast(value: usize) -> u32 {
     value.try_into().unwrap_or(u32::MAX)
+}
+
+fn upscale_image(image: &RgbImage, new_width: u32) -> RgbImage {
+    let mut output_image = RgbImage::new(new_width, image.height());
+    for row in 0..output_image.height() {
+        for column in 0..output_image.width() {
+            let pi = column * image.width() / output_image.width();
+            output_image.put_pixel(column, row, *image.get_pixel(pi, row));
+        }
+    }
+
+    output_image
 }
 
 struct Wave<'a, T> {
@@ -96,6 +108,10 @@ fn draw_waveform<'a, SampleType: Ord + Zero + Into<f64> + Bounded + Copy + Debug
         }
     }
 
+    if small_wave {
+        image = upscale_image(&image, width as u32);
+    }
+
     image
 }
 
@@ -104,16 +120,19 @@ fn demo() {
     let (header, data) = wav::read(&mut inp_file).expect("Coult not read wav file");
     assert!(data.is_sixteen());
     let image = draw_waveform(
-        3000,
-        1500,
+        2000,
+        2000,
         &Wave::<i16> {
-            data: data.as_sixteen().unwrap(),
+            // data: data.as_sixteen().unwrap(),
+            data: &vec![i16::MAX/2, i16::MAX, i16::MIN, i16::MIN/2],
             channel_count: header.channel_count,
         },
         Rgb([0, 0, 0]),
         Rgb([255, 255, 255]),
     );
-    image.save("data/out.png").expect("Error while saving the image");
+    image
+        .save("data/out.png")
+        .expect("Error while saving the image");
 }
 
 fn main() {
